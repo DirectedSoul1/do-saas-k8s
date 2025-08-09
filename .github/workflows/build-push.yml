@@ -1,0 +1,36 @@
+name: Build and Push to DOCR
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install doctl
+      run: |
+        curl -sL https://github.com/digitalocean/doctl/releases/latest/download/doctl-1.113.0-linux-amd64.tar.gz \
+        | tar -xz && sudo mv doctl /usr/local/bin/
+
+    - name: Auth to DO + login to DOCR
+      env:
+        DO_TOKEN: ${{ secrets.DO_TOKEN }}
+      run: |
+        doctl auth init -t "$DO_TOKEN"
+        doctl registry login --expiry-seconds 1200
+
+    - name: Set image tag (your registry)
+      id: vars
+      run: |
+        echo "IMAGE=registry.digitalocean.com/saas-registry-1/saas-app:${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: ./app
+        push: true
+        tags: ${{ steps.vars.outputs.IMAGE }}
+
+    - name: Print image
+      run: echo "${{ steps.vars.outputs.IMAGE }}"
